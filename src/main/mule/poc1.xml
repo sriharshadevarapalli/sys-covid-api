@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:google-sheets="http://www.mulesoft.org/schema/mule/google-sheets"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:google-drive="http://www.mulesoft.org/schema/mule/google-drive" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/google-drive http://www.mulesoft.org/schema/mule/google-drive/current/mule-google-drive.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/google-sheets http://www.mulesoft.org/schema/mule/google-sheets/current/mule-google-sheets.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<flow name="poc1Flow" doc:id="51b2bc19-d38a-4209-a681-10e4e62044cd" >
+		<scheduler doc:name="Scheduler" doc:id="3a692fe3-a62f-4eed-91da-321e93aee1fe" >
+			<scheduling-strategy >
+				<cron expression="0 0 9 * * ?" timeZone="Asia/Kolkata"/>
+			</scheduling-strategy>
+		</scheduler>
+		<google-sheets:get-spreadsheets-values-by-spreadsheet-id-range doc:name="Get Spreadsheets Values" doc:id="8d176764-e33b-4de0-809f-f5827da19442" spreadsheetId="1linODVQal6T1kR3ZeK5zRRW_IfFpsvwM6cBHaAGgdms" range="EmployeeDetails" config-ref="Google_Sheets_Config1"/>
+		<ee:transform doc:name="Transform Payload to Objects" doc:id="f87f8ea1-4bc9-4fdd-bba1-35ea1028d4fa" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+
+---
+payload.values[1 to -1] map (row) -> {
+  ID: row[0],
+  NAME: row[1],
+  DOB: row[2],
+  DOJ: row[3],
+  EMAIL: row[4]
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Set Variable allemployees" doc:id="38d4635e-0d75-49e8-96fd-d52a481d3011" variableName="allemployees"/>
+		<ee:transform doc:name="Filtering By DOB" doc:id="8c7305b9-e5dc-4a00-b822-ec0968733d09" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var today = now() as Date
+---
+payload filter (emp) ->
+  (emp.DOB as Date { format: "dd-MM-yyyy" }).day == today.day
+  and
+  (emp.DOB as Date { format: "dd-MM-yyyy" }).month == today.month]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Set Variable BirthdayEmployees" doc:id="c256fc73-30c8-4d13-9883-6850ee6a06f4" variableName="BirthdayEmployees"/>
+		<ee:transform doc:name="Filter Non DOB employees" doc:id="02f6244e-ee3c-4acc-a05b-78704dc01fc4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.allemployees //filter (emp) ->
+//!(vars.BirthdayEmployees map $.EMAIL contains emp.EMAIL)
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Set Variable nonBirthdayEmployees" doc:id="c277f6d4-4a14-4f3d-9d75-21789d2afa5e" variableName="nonBirthdayEmployees"/>
+		<choice doc:name="Choice" doc:id="9e965f0a-e68b-44dc-bac9-c95361bafd41" >
+			<when expression="#[sizeOf(vars.BirthdayEmployees) &gt; 0]">
+				<foreach doc:name="For Each" doc:id="14bdbabb-f709-4785-a224-e1b3c334509d" collection="#[vars.BirthdayEmployees]">
+					<set-variable value="#[payload.EMAIL]" doc:name="currentBirthdayEmail" doc:id="418be7e8-a2f5-401d-8ebc-a6ccc5693eb5" variableName="currentBirthdayEmail"/>
+					<set-variable value="#[payload.NAME default 'Team Member']" doc:name="Set currentName" doc:id="14c1a9b0-aa90-40f9-b00c-d89ca16d0e73" variableName="currentName"/>
+					<ee:transform doc:name="HTML" doc:id="297ef601-c657-44af-8fc3-c7cfbf9e323f" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+'<html>' ++
+'<body style="font-family: Arial, sans-serif;">' ++
+'<h2 style="color: #FF6B35;">🎉 Happy Birthday, ' ++ vars.currentName ++ '! 🎂</h2>' ++
+'<p>Wishing you a fantastic year ahead filled with success and joy!</p>' ++
+'<p>Best regards,<br>Your Team</p>' ++
+'</body>' ++
+'</html>']]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<email:send doc:id="49f71199-6c37-49a0-a408-7105900a84be" fromAddress="sriharshadevarapalli95@gmail.com" subject='Happy Birthday' toAddresses="#[[vars.currentBirthdayEmail]]" doc:name="Send Birthday Wishes " config-ref="Email_SMTP">
+						<email:body contentType="text/html" >
+						</email:body>
+					</email:send>
+				</foreach>
+				<ee:transform doc:name="Transform Message" doc:id="a45f34fe-456c-47c7-9cba-df59931dc6af">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+var safeEmployees = (vars.BirthdayEmployees default []) map (emp) -> 
+  if (emp.NAME?) 
+    emp.NAME as String default "Unknown"
+  else 
+    "Unknown"
+---
+if (sizeOf(safeEmployees) > 0)
+  safeEmployees joinBy ", "
+else 
+  "No birthdays today"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="#[payload]" doc:name="Set Variable" doc:id="11059eab-48fa-4f21-86ac-9feaca1aff4c" variableName="birthdayNames"/>
+				<foreach doc:name="For Each" doc:id="66ea4a6d-f80d-45d2-833c-da45cd64a93d" collection="#[vars.nonBirthdayEmployees]">
+					<set-variable value="#[payload.EMAIL]" doc:name="Set Variable" doc:id="c3befe35-b556-4ba8-8a12-ebf0c04cbb12" variableName="notifyEmail"/>
+					<ee:transform doc:name="Transform Message" doc:id="b248d7d1-820e-4658-88c5-396c938955cc" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+'<html>' ++
+'<body style="font-family: Arial, sans-serif;">' ++
+'<h2 style="color: #4ECDC4;">🎉 Team Celebration!</h2>' ++
+'<p>Please join us in wishing <strong>' ++ vars.birthdayNames ++ '</strong> a Happy Birthday today!</p>' ++
+'<p>Best regards,<br>Your Team</p>' ++
+'</body>' ++
+'</html>']]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<email:send doc:name="Notify Others" doc:id="c48ae67b-0c1f-42cb-8071-20ddfb71c027" toAddresses="#[[vars.notifyEmail]]" fromAddress="sriharshadevarapalli95@gmail.com" subject="#[vars.birthdayNames ++ ' Birthday Today! 🎂']" config-ref="Email_SMTP">
+						<email:body contentType="text/html">
+						</email:body>
+					</email:send>
+				</foreach>
+				<ee:transform doc:name="Success Message" doc:id="10c8958e-426a-4acf-9820-f68771767357">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	
+Message: "Birthday email sent" 
+
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="df2c2ab8-f956-446c-b134-a3ba4d1c0e77" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Message": "NO birthdays Today"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="60a4d221-4e6d-46c9-9edd-d8e21319839c" message="NO Birthdays Today" />
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
