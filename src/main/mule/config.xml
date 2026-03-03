@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:google-sheets="http://www.mulesoft.org/schema/mule/google-sheets"
+	xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/google-sheets http://www.mulesoft.org/schema/mule/google-sheets/current/mule-google-sheets.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="95d34374-a7aa-4877-ae94-1d0e15a67fb4">
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="294d5b49-2271-4237-921f-62fa63c3bf98" >
+		<email:smtp-connection host="smtp.gmail.com" port="587" user="${smtp.user}" password="${secure::smtp.password}" >
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	<google-sheets:config name="Google_Sheets_Config1" doc:name="Google Sheets Config" doc:id="8786ba08-0580-45c1-ba5c-0a975adbddf3" >
+		<google-sheets:oauth-2-0-connection >
+			<google-sheets:oauth-authorization-code consumerKey="${google.clientId}" consumerSecret="${secure::google.clientSecret}" />
+			<google-sheets:oauth-callback-config listenerConfig="HTTP_Listener_config" callbackPath="/callback" authorizePath="/auth" externalCallbackUrl="https://pocbirthday-zive35.5sc6y6-4.usa-e2.cloudhub.io/callback" />
+		</google-sheets:oauth-2-0-connection>
+	</google-sheets:config>
+	<configuration doc:name="Configuration" doc:id="3391631e-86f8-4853-9ec5-118a7511f6af" defaultErrorHandler-ref="globalError_Handler" />
+	<configuration-properties doc:name="Configuration properties" doc:id="95205262-7105-46de-88cb-06a9494049c2" file="properties/config.yaml" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="95881e85-917f-4def-a813-6317d30506d5" file="properties/config secure.yaml" key="qwertyasdfghzxcv" />
+	</mule>
